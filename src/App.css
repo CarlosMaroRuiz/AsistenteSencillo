@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Animación para las burbujas */
+.bubble {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  animation: float 6s infinite ease-in-out;
+}
+
+.bubble1 {
+  width: 20px;
+  height: 20px;
+  top: 10%;
+  left: 20%;
+  animation-delay: 0s;
+}
+
+.bubble2 {
+  width: 30px;
+  height: 30px;
+  top: 30%;
+  left: 70%;
+  animation-delay: 2s;
+}
+
+.bubble3 {
+  width: 15px;
+  height: 15px;
+  top: 50%;
+  left: 40%;
+  animation-delay: 4s;
+}
+
+.bubble4 {
+  width: 25px;
+  height: 25px;
+  top: 80%;
+  left: 60%;
+  animation-delay: 1s;
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-100px);
+    opacity: 0.2;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+}
+
+/* Animación para la abeja */
+.animate-bounce-slow {
+  animation: bounce 3s infinite ease-in-out;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
