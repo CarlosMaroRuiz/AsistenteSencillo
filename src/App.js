@@ -1,6 +1,6 @@
 import React from 'react';
 import './App.css';
-import TextChat from './features/voice/TextChat'; // Cambia la ruta según tu estructura
+import TextChat from './features/voice/TextChat'; 
 
 function App() {
   return (
