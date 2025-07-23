@@ -1,9 +1,9 @@
-// api.js
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://52.70.44.136';
+const API_BASE_URL = process.env.REACT_APP_API_URL || ''; // Deja vacío para rutas relativas
 
 export const sendMessage = async (message) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/message`, {
+    // Usa ruta relativa (/api/message) que será redirigida por Vercel
+    const response = await fetch(`/api/message`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -20,9 +20,8 @@ export const sendMessage = async (message) => {
   } catch (error) {
     console.error('Error en la API:', error);
     
-    // Manejo específico de diferentes tipos de errores
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('No se pudo conectar al servidor. ¿Está corriendo en el puerto 3000?');
+      throw new Error('No se pudo conectar al servidor. Por favor, inténtalo de nuevo más tarde.');
     }
     
     throw new Error(`Error de conexión: ${error.message}`);
