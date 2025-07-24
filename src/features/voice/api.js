@@ -1,6 +1,7 @@
 const API_BASE_URL = process.env.REACT_APP_API_URL || ''; // Deja vacío para rutas relativas
 
 export const sendMessage = async (message) => {
+
   try {
     // Usa ruta relativa (/api/message) que será redirigida por Vercel
     const response = await fetch(`/api/message`, {

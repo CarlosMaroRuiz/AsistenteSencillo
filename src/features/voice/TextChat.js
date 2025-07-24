@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { sendMessage } from './api';
 
 const TextChat = () => {
@@ -6,6 +6,43 @@ const TextChat = () => {
   const [conversation, setConversation] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [loadingMessage, setLoadingMessage] = useState('Pensando...');
+
+  // Array de mensajes de carga temáticos de abeja
+  const loadingMessages = [
+    "Milli está trabajando en eso...",
+    "Recolectando néctar de información...",
+    "Volando entre datos...",
+    "No te desesperes amiguito...",
+    "¡Bzzzz! Procesando polen de ideas...",
+    "La colmena está calculando...",
+    "Preparando miel de respuestas...",
+    "Abeja ocupada, vuelve pronto...",
+    "Polinizando tus preguntas...",
+    "Zumbando en busca de respuestas..."
+  ];
+
+  // Efecto para cambiar el mensaje de carga mientras isLoading es true
+  useEffect(() => {
+    let messageInterval;
+    
+    if (isLoading) {
+      let index = 0;
+      // Iniciar con un mensaje aleatorio
+      setLoadingMessage(loadingMessages[Math.floor(Math.random() * loadingMessages.length)]);
+      
+      // Cambiar el mensaje cada 2 segundos
+      messageInterval = setInterval(() => {
+        index = (index + 1) % loadingMessages.length;
+        setLoadingMessage(loadingMessages[index]);
+      }, 2000);
+    }
+    
+    // Limpiar el intervalo cuando isLoading cambia a false
+    return () => {
+      if (messageInterval) clearInterval(messageInterval);
+    };
+  }, [isLoading]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -16,7 +53,6 @@ const TextChat = () => {
     setMessage('');
     setError(null);
     setIsLoading(true);
-
 
     setConversation(prev => [...prev, { 
       type: 'user', 
@@ -76,8 +112,9 @@ const TextChat = () => {
                       : 'bg-white text-gray-800'
                   }`}
                 >
-                  <p className="text-sm">{msg.text}</p>
-                  <span className="text-xs opacity-70">
+                  {/* Usamos pre-wrap para preservar todos los caracteres y espacios */}
+                  <pre className="text-sm font-sans whitespace-pre-wrap break-words m-0">{msg.text}</pre>
+                  <span className="text-xs opacity-70 block mt-1">
                     {msg.timestamp.toLocaleTimeString()}
                   </span>
                 </div>
@@ -93,7 +130,7 @@ const TextChat = () => {
                       <div className="w-2 h-2 bg-yellow-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
                       <div className="w-2 h-2 bg-yellow-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
                     </div>
-                    <span className="text-sm">Pensando...</span>
+                    <span className="text-sm">{loadingMessage}</span>
                   </div>
                 </div>
               </div>
