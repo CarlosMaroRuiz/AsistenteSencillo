@@ -8,8 +8,13 @@ const TextChat = () => {
   const [error, setError] = useState(null);
   const [loadingMessage, setLoadingMessage] = useState('Pensando...');
   const [isListening, setIsListening] = useState(false);
-  const [micPermission, setMicPermission] = useState(null); // Estado para el permiso del micrófono
-  const recognitionRef = useRef(null); // Referencia para mantener la instancia de reconocimiento
+  const [micPermission, setMicPermission] = useState(null);
+  const [audioEnabled, setAudioEnabled] = useState(true);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState([]);
+  const [selectedVoice, setSelectedVoice] = useState(null);
+  const recognitionRef = useRef(null);
+  const speechSynthesisRef = useRef(null);
 
   // Array de mensajes de carga temáticos de abeja
   const loadingMessages = [
@@ -81,7 +86,64 @@ const TextChat = () => {
           // Ignorar errores al detener si ya estaba inactivo
         }
       }
+      
+      // Detener cualquier síntesis de voz en curso
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
     };
+  }, []);
+
+  // Cargar voces disponibles cuando el componente se monta
+  useEffect(() => {
+    if (!window.speechSynthesis) return;
+    
+    // Función para cargar voces
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      
+      // Filtrar voces en español
+      const spanishVoices = voices.filter(voice => 
+        voice.lang.includes('es') || 
+        voice.name.toLowerCase().includes('spanish') || 
+        voice.name.toLowerCase().includes('español')
+      );
+      
+      // Intentar identificar voces femeninas buscando patrones comunes en los nombres
+      const femalePatterns = ['female', 'woman', 'mujer', 'femenina', 'girl', 'chica', 'monica', 'maria', 'laura', 'carmen', 'elena', 'lucia', 'paulina', 'ava'];
+      
+      const femaleVoices = spanishVoices.filter(voice => 
+        femalePatterns.some(pattern => 
+          voice.name.toLowerCase().includes(pattern)
+        )
+      );
+      
+      // Si encontramos voces femeninas en español, usarlas primero
+      const sortedVoices = [
+        ...femaleVoices,
+        ...spanishVoices.filter(voice => !femaleVoices.includes(voice)),
+        ...voices.filter(voice => !spanishVoices.includes(voice))
+      ];
+      
+      setAvailableVoices(sortedVoices);
+      
+      // Seleccionar la primera voz femenina en español o la primera en español disponible
+      if (femaleVoices.length > 0) {
+        setSelectedVoice(femaleVoices[0]);
+      } else if (spanishVoices.length > 0) {
+        setSelectedVoice(spanishVoices[0]);
+      } else if (voices.length > 0) {
+        setSelectedVoice(voices[0]);
+      }
+    };
+    
+    // Cargar voces inicialmente
+    loadVoices();
+    
+    // En algunos navegadores las voces se cargan asincrónicamente
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
   }, []);
 
   // Controlar el estado de escucha
@@ -156,6 +218,55 @@ const TextChat = () => {
     };
   };
 
+  // Función para convertir texto a voz
+  const speakText = (text) => {
+    // Detener cualquier síntesis de voz anterior
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    
+    if (!audioEnabled || !window.speechSynthesis) return;
+    
+    // Crear nueva instancia de SpeechSynthesisUtterance
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'es-ES';
+    utterance.rate = 1.0; // Velocidad normal
+    utterance.pitch = 1.0; // Tono normal
+    
+    // Usar la voz seleccionada si existe
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    }
+    
+    // Eventos para controlar estado de reproducción
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+    
+    utterance.onend = () => {
+      setIsSpeaking(false);
+    };
+    
+    utterance.onerror = (event) => {
+      console.error('Error en la síntesis de voz:', event);
+      setIsSpeaking(false);
+    };
+    
+    // Guardar referencia a la utterance actual
+    speechSynthesisRef.current = utterance;
+    
+    // Reproducir
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Detener reproducción de voz
+  const stopSpeaking = () => {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  };
+
   // Verificar y solicitar permiso del micrófono
   const checkMicrophonePermission = async () => {
     try {
@@ -182,6 +293,9 @@ const TextChat = () => {
     setError(null);
     setIsLoading(true);
 
+    // Detener cualquier reproducción de voz en curso
+    stopSpeaking();
+
     setConversation(prev => [...prev, { 
       type: 'user', 
       text: userMessage, 
@@ -191,21 +305,35 @@ const TextChat = () => {
     try {
       const response = await sendMessage(userMessage);
       
+      const botResponse = response.response || 'No hubo respuesta del servidor.';
+      
       // Agregar respuesta de la API a la conversación
       setConversation(prev => [...prev, { 
         type: 'bot', 
-        text: response.response || 'No hubo respuesta del servidor.', 
+        text: botResponse, 
         timestamp: new Date() 
       }]);
+      
+      // Reproducir respuesta por voz si está habilitado
+      if (audioEnabled) {
+        speakText(botResponse);
+      }
     } catch (err) {
+      const errorMessage = 'Lo siento, hubo un problema. ¡Bzzz! Intenta de nuevo.';
+      
       setError('Error al comunicarse con la API: ' + err.message);
       
       // Agregar mensaje de error a la conversación
       setConversation(prev => [...prev, { 
         type: 'error', 
-        text: 'Lo siento, hubo un problema. ¡Bzzz! Intenta de nuevo.', 
+        text: errorMessage, 
         timestamp: new Date() 
       }]);
+      
+      // Reproducir mensaje de error por voz si está habilitado
+      if (audioEnabled) {
+        speakText(errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -218,6 +346,9 @@ const TextChat = () => {
     setError(null);
     setIsLoading(true);
 
+    // Detener cualquier reproducción de voz en curso
+    stopSpeaking();
+
     setConversation(prev => [...prev, { 
       type: 'user', 
       text: userMessage, 
@@ -228,21 +359,35 @@ const TextChat = () => {
     try {
       const response = await sendMessage(userMessage);
       
+      const botResponse = response.response || 'No hubo respuesta del servidor.';
+      
       // Agregar respuesta de la API a la conversación
       setConversation(prev => [...prev, { 
         type: 'bot', 
-        text: response.response || 'No hubo respuesta del servidor.', 
+        text: botResponse, 
         timestamp: new Date() 
       }]);
+      
+      // Reproducir respuesta por voz si está habilitado
+      if (audioEnabled) {
+        speakText(botResponse);
+      }
     } catch (err) {
+      const errorMessage = 'Lo siento, hubo un problema. ¡Bzzz! Intenta de nuevo.';
+      
       setError('Error al comunicarse con la API: ' + err.message);
       
       // Agregar mensaje de error a la conversación
       setConversation(prev => [...prev, { 
         type: 'error', 
-        text: 'Lo siento, hubo un problema. ¡Bzzz! Intenta de nuevo.', 
+        text: errorMessage, 
         timestamp: new Date() 
       }]);
+      
+      // Reproducir mensaje de error por voz si está habilitado
+      if (audioEnabled) {
+        speakText(errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -273,14 +418,25 @@ const TextChat = () => {
       if (!hasPermission) return;
     }
     
+    // Detener cualquier reproducción de voz en curso
+    stopSpeaking();
+    
     // Todo bien, iniciar escucha
     setError(null);
     setIsListening(true);
   };
 
+  const toggleAudio = () => {
+    if (isSpeaking) {
+      stopSpeaking();
+    }
+    setAudioEnabled(!audioEnabled);
+  };
+
   const clearChat = () => {
     setConversation([]);
     setError(null);
+    stopSpeaking();
   };
 
   return (
@@ -305,7 +461,7 @@ const TextChat = () => {
                       : msg.type === 'error'
                       ? 'bg-red-500 text-white'
                       : 'bg-white text-gray-800'
-                  }`}
+                  } relative`}
                 >
                   {/* Icono de micrófono para mensajes por voz */}
                   {msg.isVoice && (
@@ -321,8 +477,28 @@ const TextChat = () => {
                       <span className="text-xs">Mensaje de voz</span>
                     </div>
                   )}
+                  
                   {/* Usamos pre-wrap para preservar todos los caracteres y espacios */}
                   <pre className="text-sm font-sans whitespace-pre-wrap break-words m-0">{msg.text}</pre>
+                  
+                  {/* Mostrar botón de reproducir en respuestas del bot */}
+                  {msg.type === 'bot' && audioEnabled && (
+                    <button
+                      onClick={() => speakText(msg.text)}
+                      className="absolute top-2 right-2 text-yellow-500 hover:text-yellow-600 focus:outline-none"
+                      title="Reproducir mensaje"
+                    >
+                      <svg 
+                        className="w-4 h-4" 
+                        fill="currentColor" 
+                        viewBox="0 0 20 20" 
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path>
+                      </svg>
+                    </button>
+                  )}
+                  
                   <span className="text-xs opacity-70 block mt-1">
                     {msg.timestamp.toLocaleTimeString()}
                   </span>
@@ -362,8 +538,92 @@ const TextChat = () => {
                 </div>
               </div>
             )}
+            
+            {isSpeaking && (
+              <div className="flex justify-center">
+                <div className="bg-white text-gray-800 px-4 py-2 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <svg 
+                      className="w-5 h-5 text-yellow-500 animate-pulse" 
+                      fill="currentColor" 
+                      viewBox="0 0 20 20" 
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd"></path>
+                    </svg>
+                    <span className="text-sm">Hablando...</span>
+                    <button 
+                      onClick={stopSpeaking}
+                      className="ml-2 text-red-500 hover:text-red-600 focus:outline-none"
+                      title="Detener voz"
+                    >
+                      <svg 
+                        className="w-4 h-4" 
+                        fill="currentColor" 
+                        viewBox="0 0 20 20" 
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
+      </div>
+
+      {/* Controles de audio y selector de voces */}
+      <div className="flex justify-end mb-2 space-x-2">
+        {/* Selector de voces */}
+        {availableVoices.length > 0 && audioEnabled && (
+          <div className="relative inline-block text-left">
+            <select
+              value={selectedVoice ? selectedVoice.name : ''}
+              onChange={(e) => {
+                const selected = availableVoices.find(voice => voice.name === e.target.value);
+                if (selected) setSelectedVoice(selected);
+              }}
+              className="block w-32 md:w-40 bg-white border border-yellow-300 text-xs rounded-full px-2 py-1 appearance-none focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            >
+              {availableVoices.map(voice => (
+                <option key={voice.name} value={voice.name}>
+                  {voice.name.length > 20 ? `${voice.name.substring(0, 18)}...` : voice.name}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-yellow-500">
+              <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+              </svg>
+            </div>
+          </div>
+        )}
+        
+        {/* Botón de activar/desactivar audio */}
+        <button
+          type="button"
+          onClick={toggleAudio}
+          className={`${
+            audioEnabled ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-500 hover:bg-gray-600'
+          } text-white rounded-full p-2 transition duration-300 focus:outline-none focus:ring-2 focus:ring-green-400 flex items-center space-x-1`}
+          title={audioEnabled ? "Desactivar respuesta por voz" : "Activar respuesta por voz"}
+        >
+          <svg 
+            className="w-4 h-4" 
+            fill="currentColor" 
+            viewBox="0 0 20 20" 
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            {audioEnabled ? (
+              <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414z" clipRule="evenodd"></path>
+            ) : (
+              <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.293 7.293a1 1 0 011.414 1.414L10.414 12l3.293 3.293a1 1 0 01-1.414 1.414L9 13.414l-3.293 3.293a1 1 0 01-1.414-1.414L7.586 12 4.293 8.707a1 1 0 011.414-1.414L9 10.586l3.293-3.293z" clipRule="evenodd"></path>
+            )}
+          </svg>
+          <span className="text-xs">{audioEnabled ? "Audio ON" : "Audio OFF"}</span>
+        </button>
       </div>
 
       {/* Formulario de entrada */}
