@@ -1,10 +1,10 @@
-const API_BASE_URL = process.env.REACT_APP_API_URL || ''; // Deja vacío para rutas relativas
+const API_BASE_URL =  'https://beebot.ddns.net';
 
 export const sendMessage = async (message) => {
 
   try {
     // Usa ruta relativa (/api/message) que será redirigida por Vercel
-    const response = await fetch(`/api/message`, {
+    const response = await fetch(`${API_BASE_URL}/api/message`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

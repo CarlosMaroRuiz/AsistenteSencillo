@@ -23,10 +23,10 @@ function App() {
         ¡Bienvenido a Bee Assistant!
       </h1>
       <p className="text-lg text-white text-center px-4 mb-6">
-        Tu asistente personal con un toque de miel. ¡Escríbeme!
+        Tu asistente personal con un toque de miel. ¡Escribe o habla!
       </p>
 
-      {/* Componente de chat de texto */}
+      {/* Componente de chat con texto y voz integrados */}
       <TextChat />
     </div>
   );
